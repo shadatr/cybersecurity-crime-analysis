@@ -1,0 +1,11 @@
+Area_ID,Victim_Age,Victim_Sex,Victim_Descent,Weapon_Used_Code,Part 1-2,Time_Occurred,Location
+1,30,M,H,400,2,1230,Downtown
+5,25,F,W,500,1,1845,Harbor
+11,45,M,B,400,2,1700,Northeast
+17,37,F,H,200,1,0845,Devonshire
+7,19,M,H,102,1,2210,Wilshire
+14,52,F,B,400,2,1650,Pacific
+9,28,M,W,106,1,1320,Van Nuys
+3,33,F,H,400,2,1530,Southwest
+8,65,M,W,500,1,1100,West LA
+20,22,F,O,400,2,900,Olympic 
