@@ -15,10 +15,27 @@ warnings.filterwarnings('ignore')
 
 # Load the dataset
 print("Loading dataset...")
-df = pd.read_csv('train.csv')
+try:
+    # First try to read with default settings
+    df = pd.read_csv('cleaned_datatraincrimeanalysis.csv')
+except Exception as e:
+    print(f"Error with default settings: {str(e)}")
+    print("\nTrying with different settings...")
+    try:
+        # Try reading with explicit delimiter and error handling
+        df = pd.read_csv('cleaned_datatraincrimeanalysis.csv', 
+                        sep=None,  # Automatically detect separator
+                        engine='python',  # More flexible but slower engine
+                        on_bad_lines='warn')  # Warn about problematic lines
+    except Exception as e:
+        print(f"Error reading file: {str(e)}")
+        print("\nPlease check if the file is properly formatted.")
+        raise
 
 # Display basic information about the dataset
-print(f"Dataset shape: {df.shape}")
+print(f"\nDataset shape: {df.shape}")
+print("\nColumns in the dataset:")
+print(df.columns.tolist())
 print("\nFirst few rows:")
 print(df.head())
 
@@ -33,8 +50,6 @@ print(df.isnull().sum())
 print("\nHandling missing values and selecting features...")
 
 # Select features for the model
-# We'll use a subset of columns that are likely to be predictive
-# You can modify this list based on your domain knowledge or feature importance analysis
 features = ['Area_ID', 'Victim_Age', 'Victim_Sex', 'Victim_Descent', 
            'Weapon_Used_Code', 'Part 1-2', 'Time_Occurred']
 
@@ -74,7 +89,7 @@ preprocessor = ColumnTransformer(
 
 # Train/Test split
 print("\n--- Train/Test Split ---")
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 print(f"Training set size: {X_train.shape[0]}")
 print(f"Testing set size: {X_test.shape[0]}")
 
@@ -85,7 +100,7 @@ print("\n--- Model Training and Evaluation ---")
 print("\n1. Random Forest Classifier")
 rf_pipeline = Pipeline(steps=[
     ('preprocessor', preprocessor),
-    ('classifier', RandomForestClassifier(random_state=42))
+    ('classifier', RandomForestClassifier(n_estimators=100, random_state=42, class_weight='balanced'))
 ])
 
 # Train the model
@@ -100,11 +115,11 @@ print(classification_report(y_test, y_pred_rf))
 
 print("\nRandom Forest Confusion Matrix:")
 cm_rf = confusion_matrix(y_test, y_pred_rf)
-plt.figure(figsize=(10, 8))
+plt.figure(figsize=(12, 10))
 sns.heatmap(cm_rf, annot=True, fmt='d', cmap='Blues')
 plt.title('Random Forest Confusion Matrix')
-plt.ylabel('True Label')
-plt.xlabel('Predicted Label')
+plt.ylabel('True Category')
+plt.xlabel('Predicted Category')
 plt.savefig('rf_confusion_matrix.png')
 print("Confusion matrix saved as 'rf_confusion_matrix.png'")
 
@@ -112,7 +127,7 @@ print("Confusion matrix saved as 'rf_confusion_matrix.png'")
 print("\n2. Support Vector Machine")
 svm_pipeline = Pipeline(steps=[
     ('preprocessor', preprocessor),
-    ('classifier', SVC(random_state=42))
+    ('classifier', SVC(random_state=42, class_weight='balanced'))
 ])
 
 # Train the model
@@ -127,11 +142,11 @@ print(classification_report(y_test, y_pred_svm))
 
 print("\nSVM Confusion Matrix:")
 cm_svm = confusion_matrix(y_test, y_pred_svm)
-plt.figure(figsize=(10, 8))
+plt.figure(figsize=(12, 10))
 sns.heatmap(cm_svm, annot=True, fmt='d', cmap='Blues')
 plt.title('SVM Confusion Matrix')
-plt.ylabel('True Label')
-plt.xlabel('Predicted Label')
+plt.ylabel('True Category')
+plt.xlabel('Predicted Category')
 plt.savefig('svm_confusion_matrix.png')
 print("Confusion matrix saved as 'svm_confusion_matrix.png'")
 
@@ -169,8 +184,8 @@ print("\n--- Hyperparameter Optimization ---")
 # Grid search for Random Forest
 print("\nOptimizing Random Forest...")
 param_grid_rf = {
-    'classifier__n_estimators': [50, 100],
-    'classifier__max_depth': [None, 10, 20],
+    'classifier__n_estimators': [100, 200],
+    'classifier__max_depth': [None, 20, 30],
     'classifier__min_samples_split': [2, 5]
 }
 
@@ -186,6 +201,42 @@ y_pred_best_rf = best_rf.predict(X_test)
 
 print("\nOptimized Random Forest Classification Report:")
 print(classification_report(y_test, y_pred_best_rf))
+
+# Feature importance analysis
+try:
+    # Get feature names after preprocessing
+    # For numeric features, names stay the same
+    numeric_feature_names = numeric_features
+    
+    # For categorical features, get the names after one-hot encoding
+    categorical_feature_names = []
+    if hasattr(best_rf.named_steps['preprocessor'].named_transformers_['cat'], 'named_steps'):
+        encoder = best_rf.named_steps['preprocessor'].named_transformers_['cat'].named_steps['onehot']
+        if hasattr(encoder, 'get_feature_names_out'):
+            categorical_feature_names = encoder.get_feature_names_out(categorical_features).tolist()
+        else:
+            # Fallback for older sklearn versions
+            categorical_feature_names = encoder.get_feature_names(categorical_features).tolist()
+    
+    # Combine all feature names
+    all_feature_names = numeric_feature_names + categorical_feature_names
+    
+    # Create feature importance DataFrame
+    feature_importance = pd.DataFrame({
+        'feature': all_feature_names,
+        'importance': best_rf.named_steps['classifier'].feature_importances_
+    })
+    feature_importance = feature_importance.sort_values('importance', ascending=False)
+    
+    print("\nFeature Importance:")
+    print(feature_importance)
+    
+except Exception as e:
+    print(f"\nCould not generate detailed feature importance: {str(e)}")
+    print("Feature importances (by position):")
+    importances = best_rf.named_steps['classifier'].feature_importances_
+    for i, importance in enumerate(importances):
+        print(f"Feature {i}: {importance:.4f}")
 
 # Save the best model
 print("\n--- Saving Models ---")
